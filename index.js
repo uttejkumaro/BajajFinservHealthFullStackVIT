@@ -1,69 +1,66 @@
-// index.js
 require('dotenv').config();
 const express = require('express');
 const app = express();
 
+// Middleware: catch invalid JSON
 app.use(express.json());
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return res.status(400).json({ is_success: false, message: "Invalid JSON" });
+  }
+  next();
+});
 
-// load user info from env (recommended) or fallback to defaults
-const FULL_NAME = (process.env.USER_FULL_NAME || 'OUttejKumar').toLowerCase().replace(/\s+/g, '_'); // e.g. "john doe" -> "john_doe"
-const DOB_DDMMYYYY = process.env.USER_DOB || '13082005'; // ddmmyyyy
+// User info
+const FULL_NAME = (process.env.USER_FULL_NAME || 'uttej kumar')
+  .toLowerCase()
+  .replace(/\s+/g, '_');
+const DOB_DDMMYYYY = process.env.USER_DOB || '13082005';
 const EMAIL = process.env.USER_EMAIL || 'uttejkumar2003@gmail.com';
 const ROLL_NUMBER = process.env.USER_ROLL || '22BCE20179';
 
 function buildUserId() {
   return `${FULL_NAME}_${DOB_DDMMYYYY}`;
 }
+function isIntegerString(s) { return /^-?\d+$/.test(s); }
+function isAlphaString(s) { return /^[A-Za-z]+$/.test(s); }
 
-function isIntegerString(s) {
-  
-  return /^-?\d+$/.test(s);
-}
-function isAlphaString(s) {
-  return /^[A-Za-z]+$/.test(s);
-}
+// Health check
+app.get("/", (req, res) => {
+  res.json({ message: "API is running. Use POST /bfhl" });
+});
 
-app.post('/bfhl', (req, res) => {
+// Main route
+app.post("/bfhl", (req, res) => {
   try {
     const body = req.body;
     if (!body || !Array.isArray(body.data)) {
       return res.status(400).json({ is_success: false, message: "'data' must be an array" });
     }
 
-    const data = body.data;
-    const odd_numbers = [];
-    const even_numbers = [];
-    const alphabets = [];
-    const special_characters = [];
-    let sum = 0;
+    const odd_numbers = [], even_numbers = [], alphabets = [], special_characters = [];
+    let sum = 0, lettersForConcat = [];
 
-   
-    const lettersForConcat = [];
-
-    for (const item of data) {
+    for (const item of body.data) {
       const s = String(item);
-
       if (isIntegerString(s)) {
         const n = parseInt(s, 10);
-        if (n % 2 === 0) even_numbers.push(s); else odd_numbers.push(s);
+        (n % 2 === 0 ? even_numbers : odd_numbers).push(s);
         sum += n;
       } else if (isAlphaString(s)) {
         alphabets.push(s.toUpperCase());
-       
-        lettersForConcat.push(...s.split(''));
+        lettersForConcat.push(...s.split(""));
       } else {
-
         special_characters.push(s);
-       
       }
     }
 
-    const reversedLetters = lettersForConcat.reverse();
-    let concat_string = reversedLetters
+    const concat_string = lettersForConcat
+      .reverse()
       .map((ch, idx) => (idx % 2 === 0 ? ch.toUpperCase() : ch.toLowerCase()))
       .join('');
 
-    const response = {
+    res.json({
       is_success: true,
       user_id: buildUserId(),
       email: EMAIL,
@@ -74,14 +71,13 @@ app.post('/bfhl', (req, res) => {
       special_characters,
       sum: String(sum),
       concat_string
-    };
-
-    return res.status(200).json(response);
+    });
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ is_success: false, message: 'Server error' });
+    res.status(500).json({ is_success: false, message: "Internal Server Error" });
   }
 });
 
+// Start
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
